@@ -1,4 +1,4 @@
-const CACHE = 'bs-scan-v1';
+const CACHE = 'bs-scan-v2';
 const CORE = ['./', './index.html', './support.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -9,19 +9,19 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
+// Nur eigene Dateien bedienen; alles Fremde (OCR-Bibliothek, Sprachmodell, Schriften) unangetastet lassen
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
   e.respondWith(
-    caches.match(req).then((hit) => {
-      if (hit) return hit;
-      return fetch(req).then((res) => {
+    fetch(req).then((res) => {
+      if (res && res.ok) {
         const copy = res.clone();
-        if (res.ok && (req.url.startsWith(self.location.origin) || req.url.includes('cdn.jsdelivr.net') || req.url.includes('tessdata') || req.url.includes('unpkg.com') || req.url.includes('fonts.g'))) {
-          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      }).catch(() => hit);
-    })
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    }).catch(() => caches.match(req))
   );
 });
